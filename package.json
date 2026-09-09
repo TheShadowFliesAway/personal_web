@@ -1,0 +1,51 @@
+{
+  "name": "papertrail",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "test:e2e": "playwright test",
+    "test:production": "node scripts/check-production.mjs",
+    "auth:setup": "node scripts/create-password.mjs",
+    "backup:restore": "tsx scripts/restore-backup.ts",
+    "format": "prettier --write src scripts tests *.ts *.json *.md"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1128.0",
+    "@aws-sdk/s3-request-presigner": "3.1128.0",
+    "@blocknote/code-block": "0.54.0",
+    "@blocknote/core": "0.54.0",
+    "@blocknote/mantine": "0.54.0",
+    "@blocknote/react": "0.54.0",
+    "@fontsource-variable/dm-sans": "5.3.0",
+    "@libsql/client": "0.18.0",
+    "@mantine/core": "8.3.18",
+    "@mantine/hooks": "8.3.18",
+    "@mantine/utils": "6.0.22",
+    "@xyflow/react": "12.11.6",
+    "katex": "0.18.7",
+    "lucide-react": "1.43.0",
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "sharp": "0.35.4",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/katex": "0.16.8",
+    "@types/node": "22.20.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "prettier": "3.9.6",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22.13.0 <23"
+  }
+}
