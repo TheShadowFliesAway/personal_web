@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { BlockNoteSchema, createCodeBlockSpec, type PartialBlock } from "@blocknote/core";
+import { mathToCodeBlocks, displayMathSource } from "@/lib/markdown-math";
 import { zh } from "@blocknote/core/locales";
 import { BlockNoteView } from "@blocknote/mantine";
 import { SideMenuController, useCreateBlockNote } from "@blocknote/react";
@@ -104,6 +105,14 @@ export default function BlockEditor({
     schema,
     extensions: [syntaxHighlighter],
     dictionary: zh,
+    pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+      if (editor.getTextCursorPosition().block.type === "codeBlock") return defaultPasteHandler();
+      const text = event.clipboardData?.getData("text/plain") || "";
+      const converted = mathToCodeBlocks(text);
+      if (converted === text) return defaultPasteHandler();
+      editor.pasteMarkdown(converted);
+      return true;
+    },
     initialContent: blocks?.length
       ? (blocks as PartialBlock<typeof schema.blockSchema>[])
       : undefined,
@@ -134,15 +143,45 @@ export default function BlockEditor({
       }
     },
   });
+  const convertTypedMath = () => {
+    const convert = (items: typeof editor.document): boolean => {
+      for (const block of items) {
+        if (
+          block.type === "paragraph" &&
+          Array.isArray(block.content) &&
+          block.content.every((c) => c.type === "text")
+        ) {
+          const text = block.content.map((c) => (c.type === "text" ? c.text : "")).join("");
+          const source = displayMathSource(text);
+          if (source) {
+            editor.updateBlock(block, {
+              type: "codeBlock",
+              props: { language: "latex" },
+              content: source,
+            });
+            return true;
+          }
+        }
+        if (block.children.length && convert(block.children)) return true;
+      }
+      return false;
+    };
+    return convert(editor.document);
+  };
   useEffect(() => {
     let mounted = true;
     const init = async () => {
       try {
         if (!blocks?.length && markdown) {
-          const parsed = await editor.tryParseMarkdownToBlocks(markdown);
+          const parsed = await editor.tryParseMarkdownToBlocks(mathToCodeBlocks(markdown));
           if (mounted) editor.replaceBlocks(editor.document, parsed);
         }
-        if (mounted) ready.current = true;
+        if (mounted) {
+          while (convertTypedMath()) {
+            /* Convert previously saved formula paragraphs. */
+          }
+          ready.current = true;
+        }
       } catch (e) {
         onError(`正文加载失败：${(e as Error).message}`);
       }
@@ -163,6 +202,7 @@ export default function BlockEditor({
       sideMenu={false}
       onChange={() => {
         if (!ready.current) return;
+        if (convertTypedMath()) return;
         const doc = editor.document;
         const md = editor.blocksToMarkdownLossy(doc);
         Promise.resolve(md).then((text) => changeRef.current(text, doc));

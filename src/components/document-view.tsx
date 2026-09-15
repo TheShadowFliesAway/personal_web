@@ -300,7 +300,7 @@ export default function DocumentView(p: Props) {
             </div>
           ) : (
             <div className="markdown-editor">
-              <p className="editor-hint">原始 Markdown · 切换回块编辑即可查看排版</p>
+              <p className="editor-hint">原始 Markdown · 独立公式用 $$ 包围，切回块编辑查看渲染</p>
               <textarea
                 aria-label="Markdown 正文"
                 spellCheck={false}
