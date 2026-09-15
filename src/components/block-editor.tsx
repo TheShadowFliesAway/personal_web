@@ -1,6 +1,12 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { BlockNoteSchema, createCodeBlockSpec, type PartialBlock } from "@blocknote/core";
+import {
+  BlockNoteSchema,
+  createCodeBlockSpec,
+  type PartialBlock,
+  type InlineContent,
+  type TableContent,
+} from "@blocknote/core";
 import {
   prepareMathMarkdown,
   inlineMathParts,
@@ -193,6 +199,34 @@ const schema = BlockNoteSchema.create().extend({
   blockSpecs: { codeBlock },
   inlineContentSpecs: { inlineMath },
 });
+type MathInline = InlineContent<typeof schema.inlineContentSchema, typeof schema.styleSchema>;
+type MathTable = TableContent<typeof schema.inlineContentSchema, typeof schema.styleSchema>;
+function mapTableInline(
+  content: MathTable,
+  transform: (items: MathInline[]) => MathInline[],
+): MathTable {
+  return {
+    ...content,
+    rows: content.rows.map((row) => ({
+      ...row,
+      cells: row.cells.map((cell) =>
+        Array.isArray(cell)
+          ? {
+              type: "tableCell" as const,
+              props: {
+                backgroundColor: "default",
+                textColor: "default",
+                textAlignment: "left" as const,
+                colspan: 1,
+                rowspan: 1,
+              },
+              content: transform(cell),
+            }
+          : { ...cell, content: transform(cell.content) },
+      ),
+    })),
+  };
+}
 export default function BlockEditor({
   markdown,
   blocks,
@@ -270,25 +304,35 @@ export default function BlockEditor({
             return true;
           }
         }
-        if (block.type !== "codeBlock" && Array.isArray(block.content)) {
+        if (block.type !== "codeBlock" && block.content) {
           let changed = false;
-          const content = block.content.flatMap<(typeof block.content)[number]>((item) => {
-            if (item.type !== "text" || item.styles.code) return [item];
-            return inlineMathParts(item.text)
-              .filter((part) => part.text)
-              .map((part) => {
-                if (!part.math) return { ...item, text: part.text };
-                changed = true;
-                return {
-                  type: "inlineMath" as const,
-                  content: undefined,
-                  props: { source: decodeMathSource(part.text) },
-                };
-              });
-          });
-          if (changed) {
-            editor.updateBlock(block, { content });
-            return true;
+          const transform = (items: MathInline[]): MathInline[] =>
+            items.flatMap((item): MathInline[] => {
+              if (item.type !== "text" || item.styles.code) return [item];
+              return inlineMathParts(item.text)
+                .filter((part) => part.text)
+                .map((part) => {
+                  if (!part.math) return { ...item, text: part.text };
+                  changed = true;
+                  return {
+                    type: "inlineMath" as const,
+                    content: undefined,
+                    props: { source: decodeMathSource(part.text) },
+                  };
+                });
+            });
+          if (Array.isArray(block.content)) {
+            const content = transform(block.content);
+            if (changed) {
+              editor.updateBlock(block, { content });
+              return true;
+            }
+          } else if (block.content.type === "tableContent") {
+            const content = mapTableInline(block.content, transform);
+            if (changed) {
+              editor.updateBlock(block, { content });
+              return true;
+            }
           }
         }
         if (block.children.length && convert(block.children)) return true;
@@ -334,17 +378,21 @@ export default function BlockEditor({
         if (convertTypedMath()) return;
         const doc = editor.document;
         const replacements = new Map<string, string>();
+        const exportInline = (items: MathInline[]): MathInline[] =>
+          items.map((item) => {
+            if (item.type !== "inlineMath") return item;
+            const key = "MATHPLACEHOLDER" + crypto.randomUUID().replaceAll("-", "");
+            replacements.set(key, "$" + item.props.source + "$");
+            return { type: "text" as const, text: key, styles: {} };
+          });
         const exportBlocks = (items: typeof doc): typeof doc =>
           items.map((block) => ({
             ...block,
             content: Array.isArray(block.content)
-              ? block.content.map((item) => {
-                  if (item.type !== "inlineMath") return item;
-                  const key = "MATHPLACEHOLDER" + crypto.randomUUID().replaceAll("-", "");
-                  replacements.set(key, "$" + item.props.source + "$");
-                  return { type: "text" as const, text: key, styles: {} };
-                })
-              : block.content,
+              ? exportInline(block.content)
+              : block.content?.type === "tableContent"
+                ? mapTableInline(block.content, exportInline)
+                : block.content,
             children: exportBlocks(block.children),
           })) as typeof doc;
         const md = editor.blocksToMarkdownLossy(exportBlocks(doc));

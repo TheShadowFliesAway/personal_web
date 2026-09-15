@@ -101,3 +101,58 @@ $$ h_A=[1,0] $$
   await page.getByRole("button", { name: "块编辑", exact: true }).click();
   await expect(page.locator(".inline-math")).toHaveCount(2);
 });
+
+test("table inline math renders and survives editing, reload and Markdown round trips", async ({
+  page,
+}) => {
+  let saved: any;
+  await page.route("**/api/workspace", async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    saved ||= {
+      ...data.documents[0],
+      id: "table-math-fixture",
+      blocks: null,
+      markdown:
+        String.raw`| 模型 $A$ | 特征 | 说明 |
+| --- | --- | --- |
+| 模型 A | $h_A$ 与 $\frac{x_i}{y_i}$ | 普通文字 |
+| 模型 B | $\lVert h_B \rVert$ | ` +
+        "`$literal$`" +
+        " |",
+    };
+    data.documents.push(saved);
+    await route.fulfill({ response, json: data });
+  });
+  await page.route("**/api/visits", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/documents", async (route) => {
+    saved = { ...route.request().postDataJSON(), revision: saved.revision + 1 };
+    await route.fulfill({ json: saved });
+  });
+  await page.goto("/#document/table-math-fixture");
+  await expect(page.locator("table .inline-math")).toHaveCount(4);
+  await expect(page.locator("table code")).toHaveText("$literal$");
+  await page.getByRole("button", { name: "编辑行内公式 h_A", exact: true }).click();
+  await page.getByRole("textbox", { name: "行内公式源码" }).fill("h_C");
+  await page.getByRole("textbox", { name: "行内公式源码" }).press("Enter");
+  await expect(page.locator(".save-indicator")).toHaveText("已保存");
+  expect(saved.markdown).toContain("$h_C$");
+  expect(saved.markdown).toContain(String.raw`$\frac{x_i}{y_i}$`);
+  expect(saved.markdown).not.toContain("MATHHEX");
+  expect(saved.markdown).not.toContain("MATHPLACEHOLDER");
+  await page.reload();
+  await expect(page.locator("table .inline-math")).toHaveCount(4);
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const markdown = page.getByRole("textbox", { name: "Markdown 正文" });
+  await markdown.fill((await markdown.inputValue()) + "\n\n检查往返");
+  await page.getByRole("button", { name: "块编辑", exact: true }).click();
+  await expect(page.locator("table .inline-math")).toHaveCount(4);
+  await expect(page.locator("table tr")).toHaveCount(3);
+  await expect(page.locator("table code")).toHaveText("$literal$");
+  const cell = page.locator("table p").filter({ hasText: "普通文字" }).first();
+  await cell.fill("直接输入 $z_i$");
+  await expect(page.locator("table .inline-math")).toHaveCount(5);
+  await expect(page.locator(".save-indicator")).toHaveText("已保存");
+  await page.reload();
+  await expect(page.locator("table .inline-math")).toHaveCount(5);
+});
