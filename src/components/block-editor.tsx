@@ -50,24 +50,15 @@ const codeBlock: typeof baseCodeBlock = {
           ? current.content.map((c) => ("text" in c ? c.text : "")).join("")
           : "";
       };
-      let editingMath = false;
-      const edit = document.createElement("button");
-      edit.type = "button";
-      edit.textContent = "完成公式编辑";
-      edit.className = "math-done";
-      edit.contentEditable = "false";
-      dom.appendChild(edit);
+      let mathDialog: HTMLDialogElement | null = null;
       const updatePreview = () => {
         const current = editor.getBlock(block.id);
         const isMath =
           current?.type === "codeBlock" && ["latex", "math"].includes(current.props.language);
         preview.hidden = !isMath;
         dom.classList.toggle("is-math", Boolean(isMath));
-        dom.classList.toggle("editing-math", editingMath);
-        if (original.dom instanceof HTMLElement)
-          original.dom.hidden = Boolean(isMath) && !editingMath;
+        if (original.dom instanceof HTMLElement) original.dom.hidden = Boolean(isMath);
         tools.hidden = Boolean(isMath);
-        edit.hidden = !isMath || !editingMath;
         preview.setAttribute("role", "button");
         preview.setAttribute("aria-label", "编辑独立公式");
         preview.tabIndex = 0;
@@ -78,19 +69,95 @@ const codeBlock: typeof baseCodeBlock = {
             trust: false,
           });
       };
-      const openMath = () => {
-        if (editor.isEditable) {
-          editingMath = true;
-          updatePreview();
-        }
+      const closeMath = () => {
+        mathDialog?.close();
+        mathDialog?.remove();
+        mathDialog = null;
+        if (preview.isConnected) preview.focus({ preventScroll: true });
       };
-      preview.addEventListener("click", openMath);
-      preview.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") openMath();
+      const openMath = () => {
+        if (!editor.isEditable || mathDialog) return;
+        const dialog = document.createElement("dialog");
+        mathDialog = dialog;
+        dialog.className = "modal formula-dialog";
+        dialog.setAttribute("aria-label", "编辑独立公式");
+        const heading = document.createElement("h2");
+        heading.textContent = "编辑独立公式";
+        const input = document.createElement("textarea");
+        input.className = "standalone-input";
+        input.rows = 5;
+        input.spellcheck = false;
+        input.setAttribute("aria-label", "独立公式源码");
+        const initialSource = getText();
+        input.value = initialSource;
+        const rendered = document.createElement("div");
+        rendered.className = "formula-dialog-preview";
+        const renderDraft = () =>
+          katex.render(input.value, rendered, {
+            displayMode: true,
+            throwOnError: false,
+            trust: false,
+          });
+        input.addEventListener("input", renderDraft);
+        renderDraft();
+        const error = document.createElement("p");
+        error.setAttribute("role", "alert");
+        const actions = document.createElement("div");
+        actions.className = "modal-actions";
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "button";
+        cancel.textContent = "取消";
+        cancel.addEventListener("click", closeMath);
+        const save = document.createElement("button");
+        save.type = "button";
+        save.className = "button primary";
+        save.textContent = "保存公式";
+        save.addEventListener("click", () => {
+          if (!input.value.trim()) {
+            error.textContent = "公式不能为空";
+            return;
+          }
+          if (!editor.isEditable || !editor.getBlock(block.id)) {
+            closeMath();
+            return;
+          }
+          if (getText() !== initialSource) {
+            error.textContent = "公式已变化，请取消后重新打开。";
+            return;
+          }
+          const source = input.value;
+          closeMath();
+          if (source !== initialSource) editor.updateBlock(block.id, { content: source });
+        });
+        actions.append(cancel, save);
+        dialog.append(heading, input, rendered, error, actions);
+        dialog.addEventListener("cancel", (e) => {
+          e.preventDefault();
+          closeMath();
+        });
+        dialog.addEventListener("click", (e) => {
+          if (e.target === dialog) closeMath();
+        });
+        document.body.appendChild(dialog);
+        dialog.showModal();
+        input.focus();
+      };
+      preview.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
       });
-      edit.addEventListener("click", () => {
-        editingMath = false;
-        updatePreview();
+      preview.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openMath();
+      });
+      preview.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          openMath();
+        }
       });
       let reset: ReturnType<typeof setTimeout>;
       const handleCopy = async () => {
@@ -111,6 +178,8 @@ const codeBlock: typeof baseCodeBlock = {
         ...original,
         dom,
         destroy: () => {
+          mathDialog?.remove();
+          mathDialog = null;
           original.destroy?.();
           unsubscribe();
           clearTimeout(reset);

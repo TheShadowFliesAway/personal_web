@@ -3255,3 +3255,16 @@ input::placeholder {
   color: var(--green);
   font-size: 12px;
 }
+
+.formula-dialog h2 {
+  margin-bottom: 16px;
+  font-size: 18px;
+}
+.formula-dialog textarea {
+  font-family: monospace;
+  resize: vertical;
+}
+.formula-dialog-preview {
+  overflow-x: auto;
+  padding: 12px 0;
+}
