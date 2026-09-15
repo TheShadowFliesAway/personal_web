@@ -3216,3 +3216,42 @@ input::placeholder {
 .sidebar > * {
   flex-shrink: 0;
 }
+
+.study-code-block.is-math > [hidden] {
+  display: none !important;
+}
+.study-code-block.is-math .math-preview {
+  margin: 4px 0;
+  padding: 8px 12px;
+  border: 0;
+  cursor: pointer;
+}
+.bn-block-content[data-content-type="codeBlock"]:has(.study-code-block.is-math) {
+  background: transparent !important;
+  border: 0 !important;
+  margin: 6px 0 !important;
+}
+.inline-math {
+  display: inline-block;
+  position: relative;
+  z-index: 1;
+  vertical-align: baseline;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.inline-math:hover {
+  background: #eaf0e4;
+}
+.inline-math .katex {
+  font-size: 1.1em;
+}
+.inline-math-edit input {
+  width: min(300px, 75vw);
+  padding: 3px 6px;
+  font-family: monospace;
+}
+.math-done {
+  padding: 5px 10px;
+  color: var(--green);
+  font-size: 12px;
+}

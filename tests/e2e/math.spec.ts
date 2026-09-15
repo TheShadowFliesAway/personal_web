@@ -60,4 +60,32 @@ test("Markdown display math renders, survives saving and supports plain-text pas
   await expect(page.locator(".save-indicator")).toHaveText("已保存");
   await page.reload();
   await expect(page.locator(".math-preview .katex")).toHaveCount(1);
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await page.getByRole("textbox", { name: "Markdown 正文" }).fill(
+    String.raw`其中 $h_A$ 与 $\frac{x_i}{y_i}$ 不同。
+
+$$ h_A=[1,0] $$
+
+代码：CODEPLACEHOLDER`.replace("CODEPLACEHOLDER", () => "`$not_math$`"),
+  );
+  await page.getByRole("button", { name: "块编辑", exact: true }).click();
+  await expect(page.locator(".inline-math")).toHaveCount(2);
+  await expect(page.locator(".math-preview .katex")).toHaveCount(1);
+  await expect(page.locator(".study-code-block.is-math pre")).not.toBeVisible();
+  await page.getByRole("button", { name: "编辑独立公式", exact: true }).click();
+  await expect(page.locator(".study-code-block.is-math pre")).toBeVisible();
+  await page.getByRole("button", { name: "完成公式编辑" }).click();
+  await expect(page.locator(".study-code-block.is-math pre")).not.toBeVisible();
+  await page.getByRole("button", { name: "编辑行内公式 h_A", exact: true }).click();
+  await page.getByRole("textbox", { name: "行内公式源码" }).fill("h_B");
+  await page.getByRole("textbox", { name: "行内公式源码" }).press("Enter");
+  await expect(page.locator(".save-indicator")).toHaveText("已保存");
+  await page.reload();
+  await expect(page.locator(".inline-math")).toHaveCount(2);
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const source = await page.getByRole("textbox", { name: "Markdown 正文" }).inputValue();
+  expect(source).toContain("$h_B$");
+  expect(source).toContain(String.raw`$\frac{x_i}{y_i}$`);
+  await page.getByRole("button", { name: "块编辑", exact: true }).click();
+  await expect(page.locator(".inline-math")).toHaveCount(2);
 });

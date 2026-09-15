@@ -1,7 +1,13 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { BlockNoteSchema, createCodeBlockSpec, type PartialBlock } from "@blocknote/core";
-import { mathToCodeBlocks, displayMathSource } from "@/lib/markdown-math";
+import {
+  prepareMathMarkdown,
+  inlineMathParts,
+  decodeMathSource,
+  displayMathSource,
+} from "@/lib/markdown-math";
+import { inlineMath } from "./inline-math";
 import { zh } from "@blocknote/core/locales";
 import { BlockNoteView } from "@blocknote/mantine";
 import { SideMenuController, useCreateBlockNote } from "@blocknote/react";
@@ -44,11 +50,27 @@ const codeBlock: typeof baseCodeBlock = {
           ? current.content.map((c) => ("text" in c ? c.text : "")).join("")
           : "";
       };
+      let editingMath = false;
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.textContent = "完成公式编辑";
+      edit.className = "math-done";
+      edit.contentEditable = "false";
+      dom.appendChild(edit);
       const updatePreview = () => {
         const current = editor.getBlock(block.id);
         const isMath =
           current?.type === "codeBlock" && ["latex", "math"].includes(current.props.language);
         preview.hidden = !isMath;
+        dom.classList.toggle("is-math", Boolean(isMath));
+        dom.classList.toggle("editing-math", editingMath);
+        if (original.dom instanceof HTMLElement)
+          original.dom.hidden = Boolean(isMath) && !editingMath;
+        tools.hidden = Boolean(isMath);
+        edit.hidden = !isMath || !editingMath;
+        preview.setAttribute("role", "button");
+        preview.setAttribute("aria-label", "编辑独立公式");
+        preview.tabIndex = 0;
         if (isMath)
           katex.render(getText(), preview, {
             displayMode: true,
@@ -56,6 +78,20 @@ const codeBlock: typeof baseCodeBlock = {
             trust: false,
           });
       };
+      const openMath = () => {
+        if (editor.isEditable) {
+          editingMath = true;
+          updatePreview();
+        }
+      };
+      preview.addEventListener("click", openMath);
+      preview.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") openMath();
+      });
+      edit.addEventListener("click", () => {
+        editingMath = false;
+        updatePreview();
+      });
       let reset: ReturnType<typeof setTimeout>;
       const handleCopy = async () => {
         try {
@@ -84,7 +120,10 @@ const codeBlock: typeof baseCodeBlock = {
     },
   },
 };
-const schema = BlockNoteSchema.create().extend({ blockSpecs: { codeBlock } });
+const schema = BlockNoteSchema.create().extend({
+  blockSpecs: { codeBlock },
+  inlineContentSpecs: { inlineMath },
+});
 export default function BlockEditor({
   markdown,
   blocks,
@@ -108,7 +147,7 @@ export default function BlockEditor({
     pasteHandler: ({ event, editor, defaultPasteHandler }) => {
       if (editor.getTextCursorPosition().block.type === "codeBlock") return defaultPasteHandler();
       const text = event.clipboardData?.getData("text/plain") || "";
-      const converted = mathToCodeBlocks(text);
+      const converted = prepareMathMarkdown(text);
       if (converted === text) return defaultPasteHandler();
       editor.pasteMarkdown(converted);
       return true;
@@ -162,6 +201,27 @@ export default function BlockEditor({
             return true;
           }
         }
+        if (block.type !== "codeBlock" && Array.isArray(block.content)) {
+          let changed = false;
+          const content = block.content.flatMap<(typeof block.content)[number]>((item) => {
+            if (item.type !== "text" || item.styles.code) return [item];
+            return inlineMathParts(item.text)
+              .filter((part) => part.text)
+              .map((part) => {
+                if (!part.math) return { ...item, text: part.text };
+                changed = true;
+                return {
+                  type: "inlineMath" as const,
+                  content: undefined,
+                  props: { source: decodeMathSource(part.text) },
+                };
+              });
+          });
+          if (changed) {
+            editor.updateBlock(block, { content });
+            return true;
+          }
+        }
         if (block.children.length && convert(block.children)) return true;
       }
       return false;
@@ -173,7 +233,7 @@ export default function BlockEditor({
     const init = async () => {
       try {
         if (!blocks?.length && markdown) {
-          const parsed = await editor.tryParseMarkdownToBlocks(mathToCodeBlocks(markdown));
+          const parsed = await editor.tryParseMarkdownToBlocks(prepareMathMarkdown(markdown));
           if (mounted) editor.replaceBlocks(editor.document, parsed);
         }
         if (mounted) {
@@ -204,8 +264,25 @@ export default function BlockEditor({
         if (!ready.current) return;
         if (convertTypedMath()) return;
         const doc = editor.document;
-        const md = editor.blocksToMarkdownLossy(doc);
-        Promise.resolve(md).then((text) => changeRef.current(text, doc));
+        const replacements = new Map<string, string>();
+        const exportBlocks = (items: typeof doc): typeof doc =>
+          items.map((block) => ({
+            ...block,
+            content: Array.isArray(block.content)
+              ? block.content.map((item) => {
+                  if (item.type !== "inlineMath") return item;
+                  const key = "MATHPLACEHOLDER" + crypto.randomUUID().replaceAll("-", "");
+                  replacements.set(key, "$" + item.props.source + "$");
+                  return { type: "text" as const, text: key, styles: {} };
+                })
+              : block.content,
+            children: exportBlocks(block.children),
+          })) as typeof doc;
+        const md = editor.blocksToMarkdownLossy(exportBlocks(doc));
+        Promise.resolve(md).then((text) => {
+          for (const [key, source] of replacements) text = text.replaceAll(key, () => source);
+          changeRef.current(text, doc);
+        });
       }}
     >
       <SideMenuController
