@@ -15,6 +15,7 @@ const server = spawn(
       ...process.env,
       NODE_ENV: "production",
       DEMO_MODE: "true",
+      MCP_ENABLED: "false",
       TURSO_DATABASE_URL: `file:${database}`,
       TURSO_AUTH_TOKEN: "test-token",
       ADMIN_PASSWORD_HASH: `${salt}:${scryptSync(password, salt, 64).toString("hex")}`,
@@ -37,6 +38,7 @@ try {
     }
   }
   assert.ok(ready, "Production server should start");
+  assert.equal((await fetch(`${base}/api/mcp`)).status, 503, "MCP disabled by default");
   const html = await (await fetch(base)).text();
   assert.ok(html.includes("个人访问密码"), "Production ignores DEMO_MODE and shows login");
   for (const path of [

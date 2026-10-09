@@ -554,6 +554,13 @@ export default function WorkspaceApp({ demo }: { demo: boolean }) {
                 </div>
                 <div className="settings-grid">
                   <div className="settings-card">
+                    <h2>ChatGPT 连接</h2>
+                    <p>通过 MCP 让 ChatGPT 记录论文笔记、组织研究路线，并在这里管理授权。</p>
+                    <a className="button" href="/connections">
+                      管理 MCP 连接
+                    </a>
+                  </div>
+                  <div className="settings-card">
                     <Cloud size={24} />
                     <h2>内容与图片</h2>
                     <p>

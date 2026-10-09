@@ -12,7 +12,9 @@
     "test:production": "node scripts/check-production.mjs",
     "auth:setup": "node scripts/create-password.mjs",
     "backup:restore": "tsx scripts/restore-backup.ts",
-    "format": "prettier --write src scripts tests *.ts *.json *.md"
+    "format": "prettier --write src scripts tests *.ts *.json *.md",
+    "test:mcp": "node scripts/check-mcp.mjs",
+    "mcp:setup": "node scripts/create-mcp-secret.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1128.0",
@@ -26,13 +28,14 @@
     "@mantine/core": "8.3.18",
     "@mantine/hooks": "8.3.18",
     "@mantine/utils": "6.0.22",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@xyflow/react": "12.11.6",
     "katex": "0.18.7",
     "lucide-react": "1.43.0",
-    "next": "16.3.4",
+    "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "zod": "4.5.4"
   },
   "devDependencies": {

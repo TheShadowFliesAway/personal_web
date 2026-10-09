@@ -16,6 +16,10 @@ test("sessions reject tampering, expiration, and wrong signing key", () => {
   assert.ok(verifySession(session, key));
   assert.ok(!verifySession(session, "wrong"));
   assert.ok(!verifySession(session + "x", key));
+  assert.equal(
+    verifySession(session.slice(0, session.lastIndexOf(".") + 1) + "é".repeat(64), key),
+    false,
+  );
   assert.ok(!verifySession(signSession(key, Date.now() - 1), key));
   assert.ok(!verifySession("NaN.invalid.signature", key));
 });

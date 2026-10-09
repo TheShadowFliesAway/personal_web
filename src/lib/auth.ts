@@ -17,7 +17,13 @@ export function signSession(secret: string, expires = Date.now() + 7 * 86400_000
 }
 export function verifySession(token: string, secret: string) {
   const parts = token.split(".");
-  if (parts.length !== 3 || !/^\d+$/.test(parts[0]) || Number(parts[0]) <= Date.now()) return false;
+  if (
+    parts.length !== 3 ||
+    !/^\d+$/.test(parts[0]) ||
+    Number(parts[0]) <= Date.now() ||
+    !/^[a-f0-9]{64}$/.test(parts[2])
+  )
+    return false;
   const signature = createHmac("sha256", secret).update(`${parts[0]}.${parts[1]}`).digest("hex");
   return (
     parts[2].length === signature.length &&

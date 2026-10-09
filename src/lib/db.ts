@@ -1,4 +1,4 @@
-import { createClient, type Client } from "@libsql/client";
+import { createClient, type Client, type Transaction } from "@libsql/client";
 import { mkdirSync } from "node:fs";
 import { defaultHomeCopy, homeCopySchema, type HomeCopy } from "./home-copy";
 import { demoWorkspace } from "./seed";
@@ -49,6 +49,9 @@ export async function initialize(c: Client) {
       "CREATE TABLE IF NOT EXISTS visits (document_id TEXT NOT NULL, day TEXT NOT NULL, count INTEGER NOT NULL, last_viewed_at TEXT NOT NULL, PRIMARY KEY(document_id,day))",
       "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
       "CREATE TABLE IF NOT EXISTS login_attempts (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS mcp_credentials (hash TEXT PRIMARY KEY, kind TEXT NOT NULL, data TEXT NOT NULL, expires INTEGER NOT NULL)",
+      "CREATE INDEX IF NOT EXISTS mcp_credentials_expiry ON mcp_credentials(expires)",
+      "CREATE TABLE IF NOT EXISTS mcp_receipts (key TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, result TEXT NOT NULL)",
       "CREATE TABLE IF NOT EXISTS images (id TEXT PRIMARY KEY, size INTEGER NOT NULL, created_at TEXT NOT NULL)",
     ],
     "write",
@@ -112,65 +115,7 @@ export async function saveResource(table: "documents" | "routes", value: Documen
   const c = await db();
   const tx = await c.transaction("write");
   try {
-    const old = await tx.execute({
-      sql: `SELECT data, revision FROM ${table} WHERE id=?`,
-      args: [value.id],
-    });
-    const previous = old.rows[0];
-    if (previous ? Number(previous.revision) !== value.revision : value.revision !== 0)
-      throw new ConflictError("这份内容已在其他页面更新。请先导出当前内容，再刷新获取最新版本。");
-    if (table === "routes") {
-      for (const node of (value as ResearchRoute).nodes) {
-        const d = await tx.execute({
-          sql: "SELECT data FROM documents WHERE id=?",
-          args: [node.paperId],
-        });
-        if (!d.rows[0] || JSON.parse(String(d.rows[0].data)).kind !== "paper")
-          throw new Error("路线只能引用已有论文");
-      }
-    }
-    const updated = { ...value, revision: value.revision + 1, updatedAt: new Date().toISOString() };
-    if (table === "documents") {
-      const tags = new Set([
-        ...(value as Document).tags,
-        ...(previous ? JSON.parse(String(previous.data)).tags : []),
-      ]);
-      for (const tag of tags)
-        await tx.execute({
-          sql: "INSERT OR IGNORE INTO tags(name) VALUES (?)",
-          args: [String(tag)],
-        });
-    }
-    if (table === "documents" && previous) {
-      // Keep meaningful snapshots, coalescing continuous autosaves to one per 5 minutes.
-      const last = await tx.execute({
-        sql: "SELECT created_at FROM versions WHERE document_id=? ORDER BY id DESC LIMIT 1",
-        args: [value.id],
-      });
-      if (
-        !last.rows[0] ||
-        Date.now() - Date.parse(String(last.rows[0].created_at)) > 300_000 ||
-        (value as Document).deletedAt
-      ) {
-        await tx.execute({
-          sql: "INSERT INTO versions(document_id,data,created_at) VALUES (?,?,?)",
-          args: [value.id, String(previous.data), updated.updatedAt],
-        });
-        await tx.execute({
-          sql: "DELETE FROM versions WHERE document_id=? AND id NOT IN (SELECT id FROM versions WHERE document_id=? ORDER BY id DESC LIMIT 20)",
-          args: [value.id, value.id],
-        });
-      }
-    }
-    await tx.execute({
-      sql: `INSERT INTO ${table}(id,data,revision,updated_at) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,revision=excluded.revision,updated_at=excluded.updated_at`,
-      args: [updated.id, JSON.stringify(updated), updated.revision, updated.updatedAt],
-    });
-    if (table === "documents" && (value as Document).kind === "note" && (value as Document).folder)
-      await tx.execute({
-        sql: "INSERT OR IGNORE INTO folders VALUES (?)",
-        args: [(value as Document).folder],
-      });
+    const updated = await saveResourceInTransaction(tx, table, value);
     await tx.commit();
     return updated;
   } catch (e) {
@@ -179,4 +124,74 @@ export async function saveResource(table: "documents" | "routes", value: Documen
   } finally {
     tx.close();
   }
+}
+
+// MCP wraps this in the same transaction as its idempotency receipt.
+export async function saveResourceInTransaction(
+  tx: Transaction,
+  table: "documents" | "routes",
+  value: Document | ResearchRoute,
+  forceVersion = false,
+) {
+  const old = await tx.execute({
+    sql: `SELECT data, revision FROM ${table} WHERE id=?`,
+    args: [value.id],
+  });
+  const previous = old.rows[0];
+  if (previous ? Number(previous.revision) !== value.revision : value.revision !== 0)
+    throw new ConflictError("这份内容已在其他页面更新。请先导出当前内容，再刷新获取最新版本。");
+  if (table === "routes") {
+    for (const node of (value as ResearchRoute).nodes) {
+      const d = await tx.execute({
+        sql: "SELECT data FROM documents WHERE id=?",
+        args: [node.paperId],
+      });
+      if (!d.rows[0] || JSON.parse(String(d.rows[0].data)).kind !== "paper")
+        throw new Error("路线只能引用已有论文");
+    }
+  }
+  const updated = { ...value, revision: value.revision + 1, updatedAt: new Date().toISOString() };
+  if (table === "documents") {
+    const tags = new Set([
+      ...(value as Document).tags,
+      ...(previous ? JSON.parse(String(previous.data)).tags : []),
+    ]);
+    for (const tag of tags)
+      await tx.execute({
+        sql: "INSERT OR IGNORE INTO tags(name) VALUES (?)",
+        args: [String(tag)],
+      });
+  }
+  if (table === "documents" && previous) {
+    // Keep meaningful snapshots, coalescing continuous autosaves to one per 5 minutes.
+    const last = await tx.execute({
+      sql: "SELECT created_at FROM versions WHERE document_id=? ORDER BY id DESC LIMIT 1",
+      args: [value.id],
+    });
+    if (
+      !last.rows[0] ||
+      Date.now() - Date.parse(String(last.rows[0].created_at)) > 300_000 ||
+      (value as Document).deletedAt ||
+      forceVersion
+    ) {
+      await tx.execute({
+        sql: "INSERT INTO versions(document_id,data,created_at) VALUES (?,?,?)",
+        args: [value.id, String(previous.data), updated.updatedAt],
+      });
+      await tx.execute({
+        sql: "DELETE FROM versions WHERE document_id=? AND id NOT IN (SELECT id FROM versions WHERE document_id=? ORDER BY id DESC LIMIT 20)",
+        args: [value.id, value.id],
+      });
+    }
+  }
+  await tx.execute({
+    sql: `INSERT INTO ${table}(id,data,revision,updated_at) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,revision=excluded.revision,updated_at=excluded.updated_at`,
+    args: [updated.id, JSON.stringify(updated), updated.revision, updated.updatedAt],
+  });
+  if (table === "documents" && (value as Document).kind === "note" && (value as Document).folder)
+    await tx.execute({
+      sql: "INSERT OR IGNORE INTO folders VALUES (?)",
+      args: [(value as Document).folder],
+    });
+  return updated;
 }
