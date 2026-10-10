@@ -310,7 +310,7 @@ export default function WorkspaceApp({ demo }: { demo: boolean }) {
         <button className="brand" onClick={() => navigate("home")}>
           <span className="brand-mark">p.</span>
           <span>
-            Papertrail<small>私人学习空间</small>
+            Papertrail<small>论文与学习笔记</small>
           </span>
         </button>
         <button className="search-trigger" onClick={() => setSearchOpen(true)}>
