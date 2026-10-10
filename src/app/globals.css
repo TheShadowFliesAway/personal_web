@@ -1414,6 +1414,8 @@ section {
   gap: 20px;
 }
 .route-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 25px;
   border: 1px solid var(--line);
   background: white;
@@ -1433,8 +1435,18 @@ section {
 }
 .route-tile-nodes {
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  min-width: 0;
   gap: 8px;
   margin: 22px 0;
+}
+.route-tile-nodes .tag {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .route-tile .card-bottom {
   padding-top: 15px;
