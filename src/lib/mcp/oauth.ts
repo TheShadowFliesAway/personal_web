@@ -6,7 +6,7 @@ import { db, isConfigured, isDemo } from "../db";
 export const scopes = ["notes:read", "notes:write"];
 export const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 export const randomToken = () => randomBytes(32).toString("base64url");
-export function config() {
+export function discoveryConfig() {
   if (process.env.MCP_ENABLED !== "true")
     throw new Error("MCP_ENABLED：需要设置为 true（不带引号或空格），并重新部署 Production。");
   if (!isConfigured() || isDemo())
@@ -30,6 +30,12 @@ export function config() {
   const origin = originUrl.origin;
   if (!origin.startsWith("https://") && !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin))
     throw new Error("MCP_ORIGIN：必须使用 HTTPS。");
+  return { origin, resource: `${origin}/api/mcp` };
+}
+// OAuth discovery must work before the client's exact callback is known.
+// Issuing/accepting credentials still requires the complete private configuration.
+export function config() {
+  const { origin, resource } = discoveryConfig();
   const clientId = process.env.MCP_CLIENT_ID || "";
   const secret = process.env.MCP_CLIENT_SECRET || "";
   const redirects = (process.env.MCP_REDIRECT_URIS || "")
@@ -58,7 +64,7 @@ export function config() {
     if (url.protocol !== "https:" || url.hash || url.username || url.password)
       throw new Error("MCP_REDIRECT_URIS：回调地址必须使用 HTTPS，且不能带片段或登录信息。");
   }
-  return { origin, resource: `${origin}/api/mcp`, clientId, secret, redirects };
+  return { origin, resource, clientId, secret, redirects };
 }
 
 export async function ownerSession() {
@@ -68,7 +74,7 @@ export async function ownerSession() {
     : null;
 }
 export function challenge(scope = "notes:read") {
-  return `Bearer resource_metadata="${config().origin}/.well-known/oauth-protected-resource/api/mcp", scope="${scope}"`;
+  return `Bearer resource_metadata="${discoveryConfig().origin}/.well-known/oauth-protected-resource/api/mcp", scope="${scope}"`;
 }
 export function oauthJson(body: unknown, status = 200) {
   return Response.json(body, {
@@ -138,6 +144,12 @@ export async function storeCredential(kind: string, data: unknown, ttl: number) 
   return token;
 }
 export async function accessGrant(request: Request): Promise<Grant | null> {
+  let c: ReturnType<typeof config>;
+  try {
+    c = config();
+  } catch {
+    return null;
+  }
   const token = request.headers.get("authorization")?.match(/^Bearer ([A-Za-z0-9_-]{43})$/i)?.[1];
   if (!token) return null;
   const result = await (
@@ -148,7 +160,6 @@ export async function accessGrant(request: Request): Promise<Grant | null> {
   });
   if (!result.rows[0]) return null;
   const grant = JSON.parse(String(result.rows[0].data)) as Grant;
-  const c = config();
   return grant.resource === c.resource && grant.clientId === c.clientId ? grant : null;
 }
 export function validClient(request: Request, form: URLSearchParams) {

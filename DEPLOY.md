@@ -106,13 +106,14 @@ npm run auth:setup
 
 1. 将包含本功能的代码推送到 Vercel 绑定的生产分支，等待部署完成。MCP 默认关闭，不影响现有网站。
 2. 本机运行 `npm run mcp:setup`，生成独立的客户端 ID 和密钥。保存到密码管理器，不提交到 Git，也不用发给 AI。
-3. 在 ChatGPT「设置 → 插件 → 添加 → 创建自定义 MCP 服务器」填写：
+3. 先在 Vercel Production 设置下表前四项（`MCP_ENABLED`、`MCP_ORIGIN`、`MCP_CLIENT_ID`、`MCP_CLIENT_SECRET`），重新部署。此时可先不设置 `MCP_REDIRECT_URIS`：发现接口和工具列表可用，私人数据与实际授权仍被阻止。
+4. 在 ChatGPT「设置 → 插件 → 添加 → 创建自定义 MCP 服务器」填写：
    - 名称：`Papertrail`
    - MCP 地址：`https://你的正式域名/api/mcp`
    - 认证：OAuth
    - OAuth Client ID / Secret：第 2 步生成的值。
-   - 复制界面提供的**完整 OAuth 回调地址**。如果界面是在保存后才显示回调地址，可先保存草稿；不要随意猜测回调地址。
-4. 在 Vercel 项目 Settings → Environment Variables 添加以下变量，**仅选择 Production**：
+   - 复制界面提供的**完整 OAuth 回调地址**。如果界面没有显示，可先创建插件并发起连接；跳转到本网站并登录后，未完成配置的授权页会显示本次请求携带的回调地址。核对确实来自你刚发起的 ChatGPT 连接后再填写，不会自动信任请求中的地址。
+5. 在 Vercel 项目 Settings → Environment Variables 补全以下变量，**仅选择 Production**：
 
 | 变量                | 值                                                                                       |
 | ------------------- | ---------------------------------------------------------------------------------------- |
@@ -122,9 +123,9 @@ npm run auth:setup
 | `MCP_CLIENT_SECRET` | 第 2 步生成的随机密钥                                                                    |
 | `MCP_REDIRECT_URIS` | ChatGPT 显示的完整回调 URL；多个实际需要的地址用英文逗号分隔，无通配符                   |
 
-5. 重新部署，使环境变量生效。登录网站，进入「设置与备份 → 管理 MCP 连接」，确认显示“MCP 已启用”。
-6. 回到 ChatGPT 保存/刷新 MCP 工具列表并连接。它会跳转到网站；输入**网站的个人访问密码**，核对授权内容后点“允许连接”。客户端密钥不是登录密码。
-7. 在对话中选择这个插件，先测试：“列出我最近的 5 篇论文笔记”。再让它创建一篇测试笔记，回网站刷新核对内容、标签和数学公式。
+6. 重新部署，使环境变量生效。登录网站，进入「设置与备份 → 管理 MCP 连接」，确认显示“MCP 已启用”。
+7. 回到 ChatGPT 保存/刷新 MCP 工具列表并连接。它会跳转到网站；输入**网站的个人访问密码**，核对授权内容后点“允许连接”。客户端密钥不是登录密码。
+8. 在对话中选择这个插件，先测试：“列出我最近的 5 篇论文笔记”。再让它创建一篇测试笔记，回网站刷新核对内容、标签和数学公式。
 
 如果创建界面没有客户端 ID/Secret 输入项，请展开 OAuth 高级设置。本实现使用私人、预配置的 OAuth 客户端，不开放动态客户端注册；不能选择“无认证”来替代。不同客户端若使用不同回调地址，需要明确加入允许列表后重新部署。
 
@@ -163,3 +164,5 @@ npm run auth:setup
 - 本地验证：`npm run build && npm run test:mcp`。脚本用独立临时数据库和 3102 端口，覆盖真实 MCP SDK 调用、OAuth、权限、版本冲突和幂等写入，不连接正式数据库。
 
 参考：[OpenAI 自定义 MCP 服务器](https://developers.openai.com/api/docs/guides/custom-mcp-server)、[OAuth 接入要求](https://developers.openai.com/plugins/build/auth)。
+
+补充回归测试：`MCP_TEST_INCOMPLETE=1 npm run test:mcp` 验证尚未配置回调地址时能发现服务，同时仍然拒绝读取、写入和授权。

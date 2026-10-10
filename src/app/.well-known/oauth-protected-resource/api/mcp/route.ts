@@ -1,8 +1,8 @@
-import { config, oauthJson, scopes } from "@/lib/mcp/oauth";
+import { discoveryConfig, oauthJson, scopes } from "@/lib/mcp/oauth";
 export const dynamic = "force-dynamic";
 export function GET() {
   try {
-    const { origin, resource } = config();
+    const { origin, resource } = discoveryConfig();
     return oauthJson({
       resource,
       authorization_servers: [origin],

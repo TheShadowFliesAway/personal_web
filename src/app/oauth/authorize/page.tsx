@@ -23,11 +23,32 @@ export default async function Authorize({
     }
     grant = validateAuthorization(params);
   } catch (e) {
+    if (!(await ownerSession())) return <Login />;
+    let callback = "";
+    if (typeof query.redirect_uri === "string" && query.redirect_uri.length <= 2048) {
+      try {
+        const url = new URL(query.redirect_uri);
+        if (url.protocol === "https:" && !url.username && !url.password && !url.hash)
+          callback = query.redirect_uri;
+      } catch {
+        /* Never redirect to or automatically trust a supplied callback. */
+      }
+    }
     return (
       <main className="login-shell">
         <div className="login-card mcp-card">
           <h1>无法授权</h1>
           <p>{e instanceof Error ? e.message : "请求无效"}</p>
+          {callback && (
+            <>
+              <p>本次客户端请求携带的回调地址（尚未信任）：</p>
+              <code>{callback}</code>
+              <p>
+                仅当你刚从 ChatGPT 发起此连接，并核对地址属于该客户端后，将完整地址填入 Vercel 的
+                MCP_REDIRECT_URIS。重新部署后从 ChatGPT 再次连接。此页面不会自动添加地址或授予权限。
+              </p>
+            </>
+          )}
           <a href="/connections">查看 MCP 连接配置</a>
         </div>
       </main>

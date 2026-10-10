@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { config } from "../src/lib/mcp/oauth";
+import { config, discoveryConfig } from "../src/lib/mcp/oauth";
 
 test("MCP configuration diagnostics identify missing fields without exposing values", () => {
   const original = { ...process.env };
@@ -21,6 +21,7 @@ test("MCP configuration diagnostics identify missing fields without exposing val
     assert.equal(config().resource, "https://example.com/api/mcp");
     process.env.MCP_REDIRECT_URIS = "";
     assert.throws(() => config(), /MCP_REDIRECT_URIS/);
+    assert.equal(discoveryConfig().resource, "https://example.com/api/mcp");
     process.env.MCP_REDIRECT_URIS = secret;
     assert.throws(
       () => config(),

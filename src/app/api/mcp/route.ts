@@ -1,5 +1,5 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { accessGrant, challenge, config, oauthJson } from "@/lib/mcp/oauth";
+import { accessGrant, challenge, discoveryConfig, oauthJson } from "@/lib/mcp/oauth";
 import { createMcpServer } from "@/lib/mcp/tools";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,7 +7,7 @@ export const maxDuration = 60;
 export async function POST(request: Request) {
   let c;
   try {
-    c = config();
+    c = discoveryConfig();
   } catch {
     return oauthJson({ error: "MCP 未启用或配置不完整" }, 503);
   }
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 }
 export async function GET(request: Request) {
   try {
-    config();
+    discoveryConfig();
     if (await accessGrant(request))
       return new Response(null, {
         status: 405,

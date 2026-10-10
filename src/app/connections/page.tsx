@@ -1,14 +1,17 @@
 import Login from "@/components/login";
-import { config, ownerSession } from "@/lib/mcp/oauth";
+import { config, discoveryConfig, ownerSession } from "@/lib/mcp/oauth";
 import { db } from "@/lib/db";
 export const dynamic = "force-dynamic";
 export default async function Connections() {
   if (!(await ownerSession())) return <Login />;
   let endpoint = "",
     configured = false,
+    discoverable = false,
     configurationIssue = "";
   try {
-    endpoint = config().resource;
+    endpoint = discoveryConfig().resource;
+    discoverable = true;
+    config();
     configured = true;
   } catch (error) {
     configurationIssue = error instanceof Error ? error.message : "配置检查失败，请稍后重试。";
@@ -28,7 +31,9 @@ export default async function Connections() {
         <p>
           {configured
             ? "MCP 已启用。将下面的地址填入 ChatGPT 的自定义 MCP 服务器，认证方式选择 OAuth。"
-            : "MCP 尚未启用或配置不完整。请按照 DEPLOY.md 配置 MCP 环境变量并重新部署。"}
+            : discoverable
+              ? "MCP 服务发现已就绪，实际授权尚未启用。可以先在 ChatGPT 创建连接，取得回调地址后再补全配置。"
+              : "MCP 尚未启用或配置不完整。请按照 DEPLOY.md 配置 MCP 环境变量并重新部署。"}
         </p>
         {configurationIssue && (
           <div role="alert">
