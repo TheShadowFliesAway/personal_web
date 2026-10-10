@@ -52,6 +52,7 @@ export async function initialize(c: Client) {
       "CREATE TABLE IF NOT EXISTS mcp_credentials (hash TEXT PRIMARY KEY, kind TEXT NOT NULL, data TEXT NOT NULL, expires INTEGER NOT NULL)",
       "CREATE INDEX IF NOT EXISTS mcp_credentials_expiry ON mcp_credentials(expires)",
       "CREATE TABLE IF NOT EXISTS mcp_receipts (key TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, result TEXT NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS image_uploads (id TEXT PRIMARY KEY, state TEXT NOT NULL, lease TEXT NOT NULL, expires INTEGER NOT NULL)",
       "CREATE TABLE IF NOT EXISTS images (id TEXT PRIMARY KEY, size INTEGER NOT NULL, created_at TEXT NOT NULL)",
     ],
     "write",

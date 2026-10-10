@@ -134,6 +134,8 @@ npm run auth:setup
 - `search_notes` / `get_note`：搜索、分页列出、读取论文和学习笔记。
 - `list_organization`：复用标签与学习主题路径，如 `编程与工具/PyTorch`。
 - `create_note` / `update_note`：保存 Markdown、来源链接、代码、公式、标签和记录状态。
+- `import_image`：把 HTTPS 图片直链下载、压缩并存入现有 R2，返回可嵌入正文的 Markdown。
+- `upload_image`：接收 ChatGPT 提供的图片文件参数，保存到 R2 后返回 Markdown。
 - `list_routes` / `get_route`：查看研究路线及论文关系。
 - `create_route` / `update_route`：引用已有论文，生成含分支/汇合的有向无环路线；自动布局。更新会重新排列节点位置。
 
@@ -146,10 +148,10 @@ npm run auth:setup
 ### 数据与授权行为
 
 - 只有获得授权的工具调用能读取私人数据；工具名称和输入格式允许公开发现。现有网页登录 Cookie 不作为 MCP Bearer Token 使用，演示模式也不绕过 MCP 授权。
-- `notes:read` 是读取权限，`notes:write` 是创建/更新权限。没有删除、清空回收站、执行代码、任意 SQL 或图片上传工具。
+- `notes:read` 是读取权限，`notes:write` 是创建/更新权限。没有删除、清空回收站、执行代码或任意 SQL 工具；图片导入也要求 `notes:write` 权限。
 - OAuth 使用授权码 + PKCE S256。授权码 5 分钟、访问令牌 1 小时、刷新令牌 30 天有效；刷新时轮换令牌。数据库只保存令牌哈希。
 - 在网站「设置与备份 → 管理 MCP 连接」可撤销全部授权。要关闭功能，将 `MCP_ENABLED=false` 后重新部署。更换客户端密钥后，也建议撤销旧授权再连接。
-- 每次写操作有 `requestId`，同一操作重试不会重复创建。更换参数需使用新的 `requestId`。更新需要最新 `expectedRevision`，冲突时重新读取、合并内容。
+- 笔记和路线的写操作有 `requestId`，同一操作重试不会重复创建。更换参数需使用新的 `requestId`。更新需要最新 `expectedRevision`，冲突时重新读取、合并内容。
 - MCP 每次更新笔记都会保存历史版本（仍保留最近 20 份）。只改标题、标签等会保留富文本区块；修改 Markdown 正文时以 Markdown 重建区块，Markdown 无法表达的富文本样式可能丢失。
 - MCP 不自动读取论文链接或判断事实正确性。ChatGPT 需要自行研究并给出来源；路线关系应区分技术继承、启发和对比。
 - 导出备份不含 OAuth 凭据或请求重试记录。恢复新数据库后，需要重新连接 ChatGPT。
@@ -166,3 +168,24 @@ npm run auth:setup
 参考：[OpenAI 自定义 MCP 服务器](https://developers.openai.com/api/docs/guides/custom-mcp-server)、[OAuth 接入要求](https://developers.openai.com/plugins/build/auth)。
 
 补充回归测试：`MCP_TEST_INCOMPLETE=1 npm run test:mcp` 验证尚未配置回调地址时能发现服务，同时仍然拒绝读取、写入和授权。
+
+### 在 ChatGPT 中为笔记配图
+
+部署这个版本后，在 ChatGPT 插件管理页刷新/重新扫描工具，确认列表里有 `import_image` 和 `upload_image`（总计 11 个工具）。原有 R2 与 OAuth 配置继续使用，不需要增加环境变量；已有 `notes:write` 授权可继续使用。如果插件设置为逐个批准工具，需要启用这两个新工具。
+
+用法示例：
+
+> 把我上传的架构图保存到个人网站，再插入到 CLIP 笔记的“核心结构”一节，图注为“CLIP 双编码器结构”，保留原有正文。
+
+或者：
+
+> 使用 import_image 保存这个 HTTPS 图片直链，再把返回的 Markdown 插入指定笔记；保留图片来源说明。
+
+图片工具负责保存图片，不自动修改笔记。ChatGPT 应先读取目标笔记，导入图片，再用 `update_note` 将返回的 `markdown` 插入正文；更新仍需正确的版本号。新笔记可以在导入后通过 `create_note` 保存。
+
+- 支持 PNG、JPEG、WebP、GIF、AVIF。原始图片最多 20 MB、4000 万像素；最长边缩至 2400 像素，转成 WebP，压缩后最多 3 MB。GIF 只保留首帧，元数据会被移除。
+- 使用已有 `IMAGE_STORAGE_LIMIT_MB` 总量限制。相同压缩后内容只存一份；网络重试不会重复占容量。若上传失败且对象清理状态不确定，会保留容量预留，重试同一图片可恢复。
+- 图片保存在私有 R2 中，返回 `/api/images?id=...` 的固定本站地址。网站登录后才能查看；ChatGPT 不应将临时下载链接或 `sandbox:/...` 写进正文。
+- `upload_image` 按 [OpenAI 文件参数规范](https://developers.openai.com/plugins/reference)声明 `file`：`download_url` 和 `file_id` 必填，`mime_type`、`file_name` 可选。由 ChatGPT 提供实际文件下载参数；工具不接收本机路径，也不要求模型生成大段 Base64。生成图片能否直接传入取决于当前 ChatGPT 是否将它作为可传递文件提供，不能只靠截图或 `sandbox:` 路径访问。
+- 图片直链需要可通过 HTTPS 下载。登录墙、防盗链、过期下载地址、PDF、SVG 或普通网页会返回明确错误。论文 PDF 中的插图需要先提取为支持的图片文件。导入器限制下载大小和时间，校验每次 DNS 解析与重定向，不访问内网地址，不转发网站 Cookie 或 MCP 访问令牌。
+- 图片导入的存储与网络边界测试使用临时数据库和模拟对象存储，不往正式 R2 写入测试图片；上线后可用一张你确实要保存的图验证完整客户端流程。

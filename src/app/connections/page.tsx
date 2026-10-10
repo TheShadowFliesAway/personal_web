@@ -47,7 +47,7 @@ export default async function Connections() {
         )}
         {endpoint && <code style={{ overflowWrap: "anywhere" }}>{endpoint}</code>}
         <p>
-          支持搜索、读取、创建和更新笔记，以及组织带分支的研究路线。客户端 ID 和密钥使用你在 Vercel
+          支持笔记读写、图片导入和带分支的研究路线。客户端 ID 和密钥使用你在 Vercel
           中配置的值，不是网站登录密码。
         </p>
         <p>当前有效授权：{count} 个。撤销后需要从 ChatGPT 重新授权。</p>

@@ -28,6 +28,7 @@ const server = spawn(
       TURSO_AUTH_TOKEN: "test",
       ADMIN_PASSWORD_HASH: `${salt}:${scryptSync(password, salt, 64).toString("hex")}`,
       SESSION_SECRET: randomBytes(48).toString("hex"),
+      R2_BUCKET_NAME: "",
       MCP_ENABLED: "true",
       MCP_ORIGIN: base,
       MCP_CLIENT_ID: clientId,
@@ -101,7 +102,7 @@ try {
   );
   const anon = await connect();
   const discovered = (await anon.listTools()).tools;
-  assert.equal(discovered.length, 9);
+  assert.equal(discovered.length, 11);
   assert.deepEqual(discovered.find((t) => t.name === "create_note")._meta.securitySchemes, [
     { type: "oauth2", scopes: ["notes:write"] },
   ]);
@@ -118,6 +119,28 @@ try {
   assert.deepEqual(wireList.result.tools.find((t) => t.name === "create_note").securitySchemes, [
     { type: "oauth2", scopes: ["notes:write"] },
   ]);
+  const uploadTool = wireList.result.tools.find((t) => t.name === "upload_image");
+  assert.deepEqual(uploadTool._meta["openai/fileParams"], ["file"]);
+  assert.deepEqual(uploadTool.inputSchema.properties.file.required.sort(), [
+    "download_url",
+    "file_id",
+  ]);
+  assert.deepEqual(Object.keys(uploadTool.inputSchema.properties.file.properties).sort(), [
+    "download_url",
+    "file_id",
+    "file_name",
+    "mime_type",
+  ]);
+  assert.equal(uploadTool.annotations.openWorldHint, true);
+  assert.equal(
+    (
+      await anon.callTool({
+        name: "import_image",
+        arguments: { url: "https://example.com/image.png" },
+      })
+    ).isError,
+    true,
+  );
   const noAuth = await anon.callTool({ name: "search_notes", arguments: {} });
   assert.equal(noAuth.isError, true);
   assert.ok(noAuth._meta["mcp/www_authenticate"]);
@@ -299,6 +322,12 @@ try {
       tags: ["VLM"],
       status: "reading",
     };
+    const missingStorage = await client.callTool({
+      name: "import_image",
+      arguments: { url: "https://example.com/image.png" },
+    });
+    assert.equal(missingStorage.isError, true);
+    assert.ok(missingStorage.content[0].text.includes("R2"));
     const clip = await call(client, "create_note", args);
     assert.deepEqual(
       await call(client, "create_note", args),
@@ -450,6 +479,12 @@ try {
     );
     const readonly = await authorize("notes:read");
     const reader = await connect(readonly.access_token);
+    const deniedImage = await reader.callTool({
+      name: "upload_image",
+      arguments: { file: { download_url: "https://example.com/image.png", file_id: "file-test" } },
+    });
+    assert.equal(deniedImage.isError, true);
+    assert.ok(deniedImage._meta["mcp/www_authenticate"]);
     assert.ok((await call(reader, "search_notes")).notes.length);
     assert.equal(
       (
