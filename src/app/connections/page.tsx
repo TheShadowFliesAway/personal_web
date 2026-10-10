@@ -5,12 +5,13 @@ export const dynamic = "force-dynamic";
 export default async function Connections() {
   if (!(await ownerSession())) return <Login />;
   let endpoint = "",
-    configured = false;
+    configured = false,
+    configurationIssue = "";
   try {
     endpoint = config().resource;
     configured = true;
-  } catch {
-    /* Show setup instructions without disclosing secrets. */
+  } catch (error) {
+    configurationIssue = error instanceof Error ? error.message : "配置检查失败，请稍后重试。";
   }
   const result = await (
     await db()
@@ -29,6 +30,16 @@ export default async function Connections() {
             ? "MCP 已启用。将下面的地址填入 ChatGPT 的自定义 MCP 服务器，认证方式选择 OAuth。"
             : "MCP 尚未启用或配置不完整。请按照 DEPLOY.md 配置 MCP 环境变量并重新部署。"}
         </p>
+        {configurationIssue && (
+          <div role="alert">
+            <strong>当前部署的配置检查</strong>
+            <p>{configurationIssue}</p>
+            <p>
+              这里只显示变量名称和检查结果，不显示密钥。若你已经填写，请确认选择了
+              Production，并在保存之后重新部署。
+            </p>
+          </div>
+        )}
         {endpoint && <code style={{ overflowWrap: "anywhere" }}>{endpoint}</code>}
         <p>
           支持搜索、读取、创建和更新笔记，以及组织带分支的研究路线。客户端 ID 和密钥使用你在 Vercel

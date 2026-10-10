@@ -7,9 +7,18 @@ export const scopes = ["notes:read", "notes:write"];
 export const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 export const randomToken = () => randomBytes(32).toString("base64url");
 export function config() {
-  if (process.env.MCP_ENABLED !== "true" || !isConfigured() || isDemo())
-    throw new Error("MCP 未启用");
-  const originUrl = new URL(process.env.MCP_ORIGIN || "");
+  if (process.env.MCP_ENABLED !== "true")
+    throw new Error("MCP_ENABLED：需要设置为 true（不带引号或空格），并重新部署 Production。");
+  if (!isConfigured() || isDemo())
+    throw new Error("网站基础配置未完成，或正在使用演示模式；请先完成正式环境配置。");
+  if (!process.env.MCP_ORIGIN?.trim())
+    throw new Error("MCP_ORIGIN：尚未填写网站的固定 HTTPS 域名。");
+  let originUrl: URL;
+  try {
+    originUrl = new URL(process.env.MCP_ORIGIN);
+  } catch {
+    throw new Error("MCP_ORIGIN：不是有效的网址，请包含 https://。");
+  }
   if (
     originUrl.pathname !== "/" ||
     originUrl.search ||
@@ -17,25 +26,41 @@ export function config() {
     originUrl.username ||
     originUrl.password
   )
-    throw new Error("MCP_ORIGIN 只填写网站域名，不要带路径或查询参数");
+    throw new Error("MCP_ORIGIN：只填写网站域名，不要带 /api/mcp、查询参数或登录信息。");
   const origin = originUrl.origin;
   if (!origin.startsWith("https://") && !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin))
-    throw new Error("MCP_ORIGIN 必须使用 HTTPS");
+    throw new Error("MCP_ORIGIN：必须使用 HTTPS。");
   const clientId = process.env.MCP_CLIENT_ID || "";
   const secret = process.env.MCP_CLIENT_SECRET || "";
   const redirects = (process.env.MCP_REDIRECT_URIS || "")
     .split(",")
     .map((x) => x.trim())
     .filter(Boolean);
-  if (!clientId || secret.length < 32 || !redirects.length || !process.env.SESSION_SECRET)
-    throw new Error("MCP 授权配置不完整");
+  const missing = [
+    ...(!clientId.trim() ? ["MCP_CLIENT_ID"] : []),
+    ...(!secret ? ["MCP_CLIENT_SECRET"] : []),
+    ...(!redirects.length ? ["MCP_REDIRECT_URIS"] : []),
+  ];
+  if (missing.length)
+    throw new Error(`缺少环境变量：${missing.join("、")}。保存到 Production 后需要重新部署。`);
+  if (secret.length < 32)
+    throw new Error("MCP_CLIENT_SECRET：长度不足 32 个字符，请使用 mcp:setup 生成的完整密钥。");
+  if (!process.env.SESSION_SECRET) throw new Error("SESSION_SECRET：尚未配置网站会话密钥。");
   for (const redirect of redirects) {
-    const url = new URL(redirect);
+    let url: URL;
+    try {
+      url = new URL(redirect);
+    } catch {
+      throw new Error(
+        "MCP_REDIRECT_URIS：包含无效网址，请填写 ChatGPT 提供的完整 OAuth 回调地址。",
+      );
+    }
     if (url.protocol !== "https:" || url.hash || url.username || url.password)
-      throw new Error("回调地址必须使用 HTTPS");
+      throw new Error("MCP_REDIRECT_URIS：回调地址必须使用 HTTPS，且不能带片段或登录信息。");
   }
   return { origin, resource: `${origin}/api/mcp`, clientId, secret, redirects };
 }
+
 export async function ownerSession() {
   const token = (await cookies()).get(COOKIE)?.value;
   return token && process.env.SESSION_SECRET && verifySession(token, process.env.SESSION_SECRET)
