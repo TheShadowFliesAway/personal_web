@@ -131,6 +131,8 @@ npm run auth:setup
 
 ### 已提供的工具
 
+- `delete_note`：将指定论文或学习笔记移入回收站，可在网站恢复。要求 `notes:write`、最新 `expectedRevision` 和重试用的 `requestId`；保留正文、图片、历史及路线引用。部署后在 ChatGPT/Claude 刷新工具列表并启用新工具，可说“将某篇笔记移入回收站”。
+
 - `search_notes` / `get_note`：搜索、分页列出、读取论文和学习笔记。
 - `list_organization`：复用标签与学习主题路径，如 `编程与工具/PyTorch`。
 - `create_note` / `update_note`：保存 Markdown、来源链接、代码、公式、标签和记录状态。
@@ -148,7 +150,7 @@ npm run auth:setup
 ### 数据与授权行为
 
 - 只有获得授权的工具调用能读取私人数据；工具名称和输入格式允许公开发现。现有网页登录 Cookie 不作为 MCP Bearer Token 使用，演示模式也不绕过 MCP 授权。
-- `notes:read` 是读取权限，`notes:write` 是创建/更新权限。没有删除、清空回收站、执行代码或任意 SQL 工具；图片导入也要求 `notes:write` 权限。
+- `notes:read` 是读取权限，`notes:write` 是创建/更新/移入回收站权限。没有彻底删除、清空回收站、执行代码或任意 SQL 工具；图片导入也要求 `notes:write` 权限。
 - OAuth 使用授权码 + PKCE S256。授权码 5 分钟、访问令牌 1 小时、刷新令牌 30 天有效；刷新时轮换令牌。数据库只保存令牌哈希。
 - 在网站「设置与备份 → 管理 MCP 连接」可撤销全部授权。要关闭功能，将 `MCP_ENABLED=false` 后重新部署。更换客户端密钥后，也建议撤销旧授权再连接。
 - 笔记和路线的写操作有 `requestId`，同一操作重试不会重复创建。更换参数需使用新的 `requestId`。更新需要最新 `expectedRevision`，冲突时重新读取、合并内容。
@@ -171,7 +173,7 @@ npm run auth:setup
 
 ### 在 ChatGPT 中为笔记配图
 
-部署这个版本后，在 ChatGPT 插件管理页刷新/重新扫描工具，确认列表里有 `import_image` 和 `upload_image`（总计 11 个工具）。原有 R2 与 OAuth 配置继续使用，不需要增加环境变量；已有 `notes:write` 授权可继续使用。如果插件设置为逐个批准工具，需要启用这两个新工具。
+部署这个版本后，在 ChatGPT 插件管理页刷新/重新扫描工具，确认列表里有 `import_image` 和 `upload_image`（总计 12 个工具）。原有 R2 与 OAuth 配置继续使用，不需要增加环境变量；已有 `notes:write` 授权可继续使用。如果插件设置为逐个批准工具，需要启用这两个新工具。
 
 用法示例：
 

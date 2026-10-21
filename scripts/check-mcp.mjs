@@ -102,7 +102,8 @@ try {
   );
   const anon = await connect();
   const discovered = (await anon.listTools()).tools;
-  assert.equal(discovered.length, 11);
+  assert.equal(discovered.length, 12);
+  assert.equal(discovered.find((t) => t.name === "delete_note").annotations.destructiveHint, true);
   assert.deepEqual(discovered.find((t) => t.name === "create_note")._meta.securitySchemes, [
     { type: "oauth2", scopes: ["notes:write"] },
   ]);
@@ -494,6 +495,80 @@ try {
         })
       ).isError,
       true,
+    );
+    const deletion = {
+      requestId: "delete-clip-0001",
+      id: clip.id,
+      expectedRevision: edited.revision,
+    };
+    assert.equal(
+      (await reader.callTool({ name: "delete_note", arguments: deletion })).isError,
+      true,
+    );
+    assert.equal(
+      (
+        await client.callTool({
+          name: "delete_note",
+          arguments: { ...deletion, expectedRevision: 1 },
+        })
+      ).isError,
+      true,
+      "Stale delete must not remove a newer note",
+    );
+    assert.equal((await call(client, "get_note", { id: clip.id })).revision, edited.revision);
+    const deleted = await call(client, "delete_note", deletion);
+    assert.equal(deleted.trashed, true);
+    assert.ok(deleted.deletedAt);
+    assert.equal(deleted.revision, edited.revision + 1);
+    assert.deepEqual(
+      await call(client, "delete_note", deletion),
+      deleted,
+      "Delete retries reuse the receipt",
+    );
+    assert.equal(
+      (await client.callTool({ name: "get_note", arguments: { id: clip.id } })).isError,
+      true,
+    );
+    assert.ok(!(await call(client, "search_notes")).notes.some((n) => n.id === clip.id));
+    const trashed = JSON.parse(
+      (
+        await db.execute({
+          sql: "SELECT data FROM documents WHERE id=?",
+          args: [clip.id],
+        })
+      ).rows[0].data,
+    );
+    assert.equal(trashed.markdown, saved.markdown, "Soft delete preserves note content");
+    assert.equal(trashed.deletedAt, deleted.deletedAt);
+    assert.equal(
+      Number(
+        (
+          await db.execute({
+            sql: "SELECT COUNT(*) n FROM versions WHERE document_id=?",
+            args: [clip.id],
+          })
+        ).rows[0].n,
+      ),
+      3,
+      "Soft delete creates a recovery snapshot",
+    );
+    assert.ok(
+      (await call(client, "get_route", { id: route.id })).nodes.some((n) => n.paperId === clip.id),
+      "Route references survive soft deletion",
+    );
+    assert.equal(
+      (
+        await client.callTool({
+          name: "delete_note",
+          arguments: {
+            ...deletion,
+            requestId: "delete-again-0001",
+            expectedRevision: deleted.revision,
+          },
+        })
+      ).isError,
+      true,
+      "Already trashed notes are not silently mutated",
     );
     const refresh = await tokenRequest({
       grant_type: "refresh_token",
