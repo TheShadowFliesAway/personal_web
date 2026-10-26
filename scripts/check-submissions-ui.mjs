@@ -52,7 +52,6 @@ try {
   await page
     .getByLabel("论文标题 *", { exact: true })
     .fill("Learning Visual Representations for Robust Robot Manipulation");
-  await page.getByLabel("作者", { exact: true }).fill("ZJX et al.");
   await page
     .getByLabel("论文简介", { exact: true })
     .fill("从视觉表示到机器人策略，记录这篇论文的每一轮修改与投稿进展。");

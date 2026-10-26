@@ -60,7 +60,7 @@ export default function SubmissionsPage({
   }, [allowed]);
   const filtered = papers.filter(
     (p) =>
-      `${p.title} ${p.authors} ${p.history.map((h) => h.venue).join(" ")}`
+      `${p.title} ${p.history.map((h) => h.venue).join(" ")}`
         .toLowerCase()
         .includes(query.toLowerCase()) &&
       (status === "all" || (currentSubmission(p)?.status || "draft") === status),
@@ -174,7 +174,7 @@ export default function SubmissionsPage({
               aria-label="搜索投稿论文"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索论文标题、作者或会议 / 期刊…"
+              placeholder="搜索论文标题或会议 / 期刊…"
             />
             <button className="button" onClick={() => void reload()} disabled={loading}>
               刷新
@@ -229,7 +229,6 @@ export default function SubmissionsPage({
                       )}
                     </div>
                     <h2>{p.title}</h2>
-                    {p.authors && <p className="muted">{p.authors}</p>}
                     {p.summary && <p className="submission-text">{p.summary}</p>}
                     <div className="submission-current">
                       <span>{current?.status === "submitted" ? "当前在投" : "最近投稿"}</span>
@@ -378,15 +377,7 @@ function SubmissionEditor({
     if (!busy && (!dirty || window.confirm("有未保存的修改，确定放弃吗？"))) onClose();
   };
   const text = (
-    key:
-      | "title"
-      | "authors"
-      | "summary"
-      | "notes"
-      | "paperGithub"
-      | "overleaf"
-      | "codeGithub"
-      | "paperUrl",
+    key: "title" | "summary" | "notes" | "paperGithub" | "overleaf" | "codeGithub" | "paperUrl",
     label: string,
     multiline = false,
   ) => (
@@ -439,7 +430,6 @@ function SubmissionEditor({
         <fieldset disabled={busy}>
           <div className="submission-form-grid">
             {text("title", "论文标题 *")}
-            {text("authors", "作者")}
             {text("summary", "论文简介", true)}
           </div>
           <h3>论文链接</h3>
