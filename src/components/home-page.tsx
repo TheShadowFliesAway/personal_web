@@ -71,6 +71,9 @@ export default function HomePage({
           {homeCopy.description && <p>{homeCopy.description}</p>}
         </div>
         <div className="home-create-actions">
+          <a className="button" href="/submissions">
+            论文投稿 <ArrowUpRight size={16} />
+          </a>
           <button className="button" onClick={() => onCreate("paper")}>
             <Plus size={16} />
             记录论文

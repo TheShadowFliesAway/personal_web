@@ -41,6 +41,7 @@ export async function initialize(c: Client) {
   await c.batch(
     [
       "CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, data TEXT NOT NULL, revision INTEGER NOT NULL, updated_at TEXT NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS submissions (id TEXT PRIMARY KEY, data TEXT NOT NULL, revision INTEGER NOT NULL, updated_at TEXT NOT NULL)",
       "CREATE TABLE IF NOT EXISTS routes (id TEXT PRIMARY KEY, data TEXT NOT NULL, revision INTEGER NOT NULL, updated_at TEXT NOT NULL)",
       "CREATE TABLE IF NOT EXISTS versions (id INTEGER PRIMARY KEY AUTOINCREMENT, document_id TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL)",
       "CREATE INDEX IF NOT EXISTS versions_document ON versions(document_id, id DESC)",

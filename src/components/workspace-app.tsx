@@ -335,6 +335,10 @@ export default function WorkspaceApp({ demo }: { demo: boolean }) {
               {n.count !== undefined && <small>{n.count}</small>}
             </button>
           ))}
+          <a className="nav-item" href="/submissions">
+            <FileText size={18} />
+            <span>论文投稿</span>
+          </a>
         </nav>
         <div className="nav-divider" />
         <button

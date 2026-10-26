@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { randomBytes, scryptSync } from "node:crypto";
+import { randomBytes, randomUUID, scryptSync } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import assert from "node:assert/strict";
 
@@ -99,6 +99,132 @@ try {
       .status,
     401,
   );
+  // Submission viewers are independent from the private workspace session.
+  assert.equal((await fetch(`${base}/api/submissions`)).status, 401);
+  assert.ok((await (await fetch(`${base}/submissions`)).text()).includes("查看口令"));
+  const access = (code, hdr = origin) =>
+    fetch(`${base}/api/submissions/access`, {
+      method: "POST",
+      headers: hdr,
+      body: JSON.stringify({ code }),
+    });
+  assert.equal((await access("wrong")).status, 401);
+  assert.equal(
+    (await access("zjx", { ...origin, Origin: "https://untrusted.example" })).status,
+    403,
+  );
+  const view = await access("zjx");
+  assert.equal(view.status, 200);
+  const viewerCookie = view.headers.get("set-cookie").split(";")[0];
+  const viewer = { ...origin, Cookie: viewerCookie };
+  assert.equal((await fetch(`${base}/api/submissions`, { headers: viewer })).status, 200);
+  for (const path of [
+    "workspace",
+    "export",
+    "documents",
+    "images?id=00000000-0000-0000-0000-000000000000",
+  ])
+    if (path !== "documents")
+      assert.equal((await fetch(`${base}/api/${path}`, { headers: viewer })).status, 401);
+  assert.equal(
+    (
+      await fetch(`${base}/api/workspace`, {
+        headers: {
+          Cookie: viewerCookie.replace("papertrail_submissions_view", "papertrail_session"),
+        },
+      })
+    ).status,
+    401,
+    "Viewer token cannot become admin token",
+  );
+  const now = new Date().toISOString();
+  const paper = {
+    id: randomUUID(),
+    title: "Submission integration test",
+    authors: "Researcher",
+    summary: "",
+    paperGithub: "https://github.com/example/paper",
+    overleaf: "https://www.overleaf.com/project/example",
+    codeGithub: "",
+    paperUrl: "",
+    links: [],
+    notes: "A note",
+    revision: 0,
+    createdAt: now,
+    updatedAt: now,
+    history: [
+      {
+        id: randomUUID(),
+        venue: "Conference A",
+        status: "rejected",
+        submittedAt: "2026-01-01",
+        decisionAt: "2026-03-01",
+        notes: "Revise",
+      },
+      {
+        id: randomUUID(),
+        venue: "Conference B",
+        status: "submitted",
+        submittedAt: "2026-04-01",
+        decisionAt: "",
+        notes: "",
+      },
+    ],
+  };
+  const saveSubmission = (value, hdr = headers) =>
+    fetch(`${base}/api/submissions`, { method: "PUT", headers: hdr, body: JSON.stringify(value) });
+  assert.equal((await saveSubmission(paper, viewer)).status, 401);
+  assert.equal(
+    (await saveSubmission(paper, { ...headers, Origin: "https://untrusted.example" })).status,
+    403,
+  );
+  assert.equal((await saveSubmission({ ...paper, overleaf: "javascript:alert(1)" })).status, 400);
+  assert.equal(
+    (
+      await saveSubmission({
+        ...paper,
+        history: paper.history.map((h) => ({ ...h, status: "submitted", decisionAt: "" })),
+      })
+    ).status,
+    400,
+  );
+  const created = await saveSubmission(paper);
+  assert.equal(created.status, 200);
+  const saved = await created.json();
+  assert.equal(saved.revision, 1);
+  assert.equal((await saveSubmission(paper)).status, 409);
+  assert.ok(
+    !(await (await fetch(`${base}/submissions`)).text()).includes(paper.title),
+    "Locked HTML must not include private records",
+  );
+  const list = await fetch(`${base}/api/submissions`, { headers: viewer });
+  assert.ok(list.headers.get("cache-control").includes("no-store"));
+  assert.equal((await list.json()).submissions[0].history.length, 2);
+  const changed = await saveSubmission({
+    ...saved,
+    history: saved.history.map((h, i) =>
+      i === 1 ? { ...h, status: "accepted", decisionAt: "2026-05-01" } : h,
+    ),
+  });
+  assert.equal(changed.status, 200);
+  assert.equal(
+    (await (await fetch(`${base}/api/export`, { headers })).json()).submissions[0].history[1]
+      .status,
+    "accepted",
+  );
+  const removeSubmission = (revision, hdr) =>
+    fetch(`${base}/api/submissions`, {
+      method: "DELETE",
+      headers: hdr,
+      body: JSON.stringify({ id: paper.id, revision }),
+    });
+  assert.equal((await removeSubmission(2, viewer)).status, 401);
+  assert.equal((await removeSubmission(1, headers)).status, 409);
+  assert.equal((await removeSubmission(2, headers)).status, 200);
+  assert.equal(
+    (await fetch(`${base}/api/submissions`, { headers: { Cookie: viewerCookie + "bad" } })).status,
+    401,
+  );
   for (let i = 0; i < 10; i++)
     await fetch(`${base}/api/auth`, {
       method: "POST",
@@ -117,7 +243,7 @@ try {
     "Login limit persists in database",
   );
   console.log(
-    "Production checks passed: closed demo, private APIs, login, secure cookie, tampering, rate limiting, empty cloud workspace, missing R2.",
+    "Production checks passed: closed demo, private APIs, login, secure cookie, tampering, rate limiting, empty cloud workspace, missing R2, submission access isolation/CRUD/history/conflicts/export.",
   );
 } finally {
   server.kill("SIGTERM");

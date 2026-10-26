@@ -60,7 +60,10 @@ export default function Login() {
           {busy ? "正在登录…" : "进入学习空间"}
           <ArrowRight size={17} />
         </button>
-        <small>仅自己可见 · Papertrail</small>
+        <a className="button" href="/submissions">
+          查看论文投稿 →
+        </a>
+        <small>投稿页面使用独立查看口令 · Papertrail</small>
       </form>
     </main>
   );

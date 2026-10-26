@@ -3,6 +3,7 @@ import { createClient } from "@libsql/client";
 import { z } from "zod";
 import { documentSchema, routeSchema } from "../src/lib/model";
 import { homeCopySchema, defaultHomeCopy } from "../src/lib/home-copy";
+import { submissionSchema } from "../src/lib/submissions";
 import { initialize } from "../src/lib/db";
 
 async function main() {
@@ -19,6 +20,7 @@ async function main() {
   const backup = z
     .object({
       format: z.literal("papertrail-v1"),
+      submissions: z.array(submissionSchema).default([]),
       homeCopy: homeCopySchema.default(defaultHomeCopy),
       documents: z.array(documentSchema),
       routes: z.array(routeSchema),
@@ -43,7 +45,8 @@ async function main() {
   const ids = new Set(backup.documents.map((d) => d.id));
   if (
     ids.size !== backup.documents.length ||
-    new Set(backup.routes.map((r) => r.id)).size !== backup.routes.length
+    new Set(backup.routes.map((r) => r.id)).size !== backup.routes.length ||
+    new Set(backup.submissions.map((p) => p.id)).size !== backup.submissions.length
   )
     throw new Error("备份包含重复 ID");
   for (const r of backup.routes)
@@ -59,7 +62,7 @@ async function main() {
     const tx = await c.transaction("write");
     try {
       const count = await tx.execute(
-        "SELECT (SELECT COUNT(*) FROM documents)+(SELECT COUNT(*) FROM routes)+(SELECT COUNT(*) FROM images)+(SELECT COUNT(*) FROM versions) AS count",
+        "SELECT (SELECT COUNT(*) FROM documents)+(SELECT COUNT(*) FROM routes)+(SELECT COUNT(*) FROM images)+(SELECT COUNT(*) FROM versions)+(SELECT COUNT(*) FROM submissions) AS count",
       );
       if (Number(count.rows[0].count))
         throw new Error("目标数据库不是空的。为避免覆盖，恢复已停止。");
@@ -68,6 +71,10 @@ async function main() {
           sql: "INSERT INTO settings(key,value) VALUES ('home-copy',?)",
           args: [JSON.stringify(backup.homeCopy)],
         },
+        ...backup.submissions.map((p) => ({
+          sql: "INSERT INTO submissions VALUES (?,?,?,?)",
+          args: [p.id, JSON.stringify(p), p.revision, p.updatedAt],
+        })),
         ...backup.documents.map((d) => ({
           sql: "INSERT INTO documents VALUES (?,?,?,?)",
           args: [d.id, JSON.stringify(d), d.revision, d.updatedAt],
