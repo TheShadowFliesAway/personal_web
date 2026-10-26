@@ -146,13 +146,7 @@ export default function SubmissionsPage({
       ) : (
         <>
           <div className="submission-stats">
-            {[
-              ["all", "全部论文"],
-              ["submitted", submissionStatuses.submitted],
-              ["accepted", "中稿"],
-              ["rejected", "拒稿"],
-              ["draft", "待投稿"],
-            ].map(([key, label]) => (
+            {[["all", "全部论文"], ...Object.entries(submissionStatuses)].map(([key, label]) => (
               <button
                 key={key}
                 className={status === key ? "selected" : ""}
@@ -204,7 +198,7 @@ export default function SubmissionsPage({
                   <article className="submission-card" key={p.id}>
                     <div className="submission-card-top">
                       <span className={`submission-status ${current?.status || "draft"}`}>
-                        {current ? submissionStatuses[current.status] : "待投稿"}
+                        {current ? submissionStatuses[current.status] : submissionStatuses.draft}
                       </span>
                       {admin && (
                         <div className="submission-actions">
@@ -526,7 +520,9 @@ function SubmissionEditor({
                     onChange={(e) =>
                       updateRound(i, {
                         status: e.target.value as typeof h.status,
-                        ...(e.target.value === "submitted" ? { decisionAt: "" } : {}),
+                        ...(!["rejected", "accepted"].includes(e.target.value)
+                          ? { decisionAt: "" }
+                          : {}),
                       })
                     }
                   >
@@ -549,7 +545,7 @@ function SubmissionEditor({
                   结果日期
                   <input
                     type="date"
-                    disabled={h.status === "submitted"}
+                    disabled={!["rejected", "accepted"].includes(h.status)}
                     min={h.submittedAt || undefined}
                     value={h.decisionAt}
                     onChange={(e) => updateRound(i, { decisionAt: e.target.value })}

@@ -75,11 +75,33 @@ try {
   await page.getByText("投稿历程", { exact: false }).click();
   await expect(page.locator(".submission-history li")).toHaveCount(2);
   await page.screenshot({ path: "artifacts/submissions/desktop.png", fullPage: true });
-  await page.getByRole("button", { name: /^编辑 Learning/ }).click();
-  await page.getByLabel("状态", { exact: true }).last().selectOption("accepted");
-  await page.getByRole("button", { name: "保存论文" }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.locator(".submission-card-top > .submission-status")).toHaveText("中稿");
+  for (const [value, label] of [
+    ["submitted", "在投"],
+    ["resubmitting", "转投"],
+    ["rejected", "拒稿"],
+    ["draft", "待投"],
+    ["accepted", "中稿"],
+  ]) {
+    await page.getByRole("button", { name: /^编辑 Learning/ }).click();
+    await expect(page.getByLabel("状态", { exact: true }).last().locator("option")).toHaveText([
+      "在投",
+      "转投",
+      "拒稿",
+      "待投",
+      "中稿",
+    ]);
+    await page.getByLabel("状态", { exact: true }).last().selectOption(value);
+    await page.getByRole("button", { name: "保存论文" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.locator(".submission-card-top > .submission-status")).toHaveText(label);
+    const filter = page
+      .locator(".submission-stats button")
+      .filter({ has: page.locator("span", { hasText: new RegExp(`^${label}$`) }) });
+    await expect(filter.locator("strong")).toHaveText("1");
+    await filter.click();
+    await expect(page.locator(".submission-card")).toHaveCount(1);
+    await page.locator(".submission-stats button").filter({ hasText: "全部论文" }).click();
+  }
   const visitor = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const view = await visitor.newPage();
   await view.goto(`${base}/submissions`);

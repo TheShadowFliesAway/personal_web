@@ -15,8 +15,10 @@ const link = z
   }, "链接必须是完整的 http / https 地址");
 const date = z.union([z.literal(""), z.iso.date()]);
 export const submissionStatuses = {
-  submitted: "在投和转投",
+  submitted: "在投",
+  resubmitting: "转投",
   rejected: "拒稿",
+  draft: "待投",
   accepted: "中稿",
 } as const;
 export const submissionSchema = z
@@ -43,7 +45,7 @@ export const submissionSchema = z
         z.object({
           id: z.uuid(),
           venue: z.string().trim().min(1, "请填写投稿会议或期刊").max(200),
-          status: z.enum(["submitted", "rejected", "accepted"]),
+          status: z.enum(["submitted", "resubmitting", "rejected", "draft", "accepted"]),
           submittedAt: date,
           decisionAt: date,
           notes: z.string().max(3000),
@@ -63,8 +65,8 @@ export const submissionSchema = z
         ctx.addIssue({ code: "custom", message: "请先更新上一轮投稿结果，再添加新一轮投稿" });
       if (h.submittedAt && h.decisionAt && h.decisionAt < h.submittedAt)
         ctx.addIssue({ code: "custom", message: "结果日期不能早于投稿日期" });
-      if (h.status === "submitted" && h.decisionAt)
-        ctx.addIssue({ code: "custom", message: "在投和转投记录不应填写结果日期" });
+      if (!["rejected", "accepted"].includes(h.status) && h.decisionAt)
+        ctx.addIssue({ code: "custom", message: "只有拒稿或中稿记录才能填写结果日期" });
     });
   });
 export type Submission = z.infer<typeof submissionSchema>;

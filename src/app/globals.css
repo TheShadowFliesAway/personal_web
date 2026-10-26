@@ -3391,7 +3391,7 @@ input::placeholder {
 }
 .submission-stats {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
   margin: 26px 0;
 }
@@ -3628,5 +3628,15 @@ input::placeholder {
   }
   .submission-link-row input:first-child {
     grid-column: 1 / -1;
+  }
+}
+
+.submission-status.resubmitting {
+  background: #f2ecfa;
+  color: #80619a;
+}
+@media (max-width: 680px) {
+  .submission-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
