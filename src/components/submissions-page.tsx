@@ -91,9 +91,7 @@ export default function SubmissionsPage({
       </header>
       <div className="submission-heading">
         <div>
-          <span className="eyebrow">RESEARCH IN PROGRESS</span>
-          <h1>让每一步研究，都有迹可循。</h1>
-          <p>记录投稿的去向、进展与结果，留下一篇论文走过的路。</p>
+          <h1>投稿记录</h1>
         </div>
         {allowed && admin && (
           <button className="button primary" onClick={() => setEditing(newSubmission())}>
