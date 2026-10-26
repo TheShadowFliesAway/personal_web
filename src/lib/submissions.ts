@@ -15,7 +15,7 @@ const link = z
   }, "链接必须是完整的 http / https 地址");
 const date = z.union([z.literal(""), z.iso.date()]);
 export const submissionStatuses = {
-  submitted: "在投",
+  submitted: "在投和转投",
   rejected: "拒稿",
   accepted: "中稿",
 } as const;
@@ -64,7 +64,7 @@ export const submissionSchema = z
       if (h.submittedAt && h.decisionAt && h.decisionAt < h.submittedAt)
         ctx.addIssue({ code: "custom", message: "结果日期不能早于投稿日期" });
       if (h.status === "submitted" && h.decisionAt)
-        ctx.addIssue({ code: "custom", message: "在投记录不应填写结果日期" });
+        ctx.addIssue({ code: "custom", message: "在投和转投记录不应填写结果日期" });
     });
   });
 export type Submission = z.infer<typeof submissionSchema>;

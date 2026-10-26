@@ -148,7 +148,7 @@ export default function SubmissionsPage({
           <div className="submission-stats">
             {[
               ["all", "全部论文"],
-              ["submitted", "在投"],
+              ["submitted", submissionStatuses.submitted],
               ["accepted", "中稿"],
               ["rejected", "拒稿"],
               ["draft", "待投稿"],
@@ -231,7 +231,7 @@ export default function SubmissionsPage({
                     <h2>{p.title}</h2>
                     {p.summary && <p className="submission-text">{p.summary}</p>}
                     <div className="submission-current">
-                      <span>{current?.status === "submitted" ? "当前在投" : "最近投稿"}</span>
+                      <span>{current?.status === "submitted" ? "当前投稿" : "最近投稿"}</span>
                       <strong>{current?.venue || "尚未添加投稿记录"}</strong>
                       {current?.submittedAt && <small>投稿于 {current.submittedAt}</small>}
                     </div>
